@@ -3,18 +3,29 @@ import React, { useState, useEffect, useContext } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useMatch } from '../../hooks/useMatch';
 import { NotificationContext } from '../../context/NotificationContext';
+import { useAuth } from '../../hooks/useAuth';
 import ReferrerCard from '../../components/referrer/ReferrerCard';
 import Input from '../../components/common/Input';
 import Button from '../../components/common/Button';
 
 const DiscoverReferrers = () => {
   const navigate = useNavigate();
+  const { profile } = useAuth();
   const { matches, loading, fetchMatches } = useMatch();
   const { addNotification } = useContext(NotificationContext);
   const [filters, setFilters] = useState({ company: '', limit: 12 });
 
   useEffect(() => {
-    fetchMatches('referrers', filters);
+    if (!profile) return;
+    const profileCompany = Array.isArray(profile.targetCompanies) && profile.targetCompanies.length > 0
+      ? profile.targetCompanies[0]
+      : '';
+    setFilters((prev) => ({ ...prev, company: prev.company || profileCompany }));
+  }, [profile]);
+
+  useEffect(() => {
+    const skillFilter = Array.isArray(profile?.skills) ? profile.skills.join(',') : '';
+    fetchMatches('referrers', { ...filters, skills: skillFilter });
   }, [filters.limit]);
 
   const handleFilterChange = (e) => {
@@ -23,7 +34,8 @@ const DiscoverReferrers = () => {
   };
 
   const handleSearch = () => {
-    fetchMatches('referrers', filters);
+    const skillFilter = Array.isArray(profile?.skills) ? profile.skills.join(',') : '';
+    fetchMatches('referrers', { ...filters, skills: skillFilter });
   };
 
   const handleConnect = (referrerId) => {
@@ -35,6 +47,11 @@ const DiscoverReferrers = () => {
       <div>
         <h1 className="text-3xl font-bold mb-2">Discover Referrers</h1>
         <p className="text-gray-600">Find the right referrer at your target company</p>
+        {Array.isArray(profile?.skills) && profile.skills.length > 0 && (
+          <p className="text-sm text-blue-700 mt-2">
+            Matching based on your profile skills: {profile.skills.slice(0, 5).join(', ')}
+          </p>
+        )}
       </div>
 
       {/* Filters */}

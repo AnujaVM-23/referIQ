@@ -29,8 +29,8 @@ const referralRequestSchema = new mongoose.Schema({
   resumeUrl: String,
   status: {
     type: String,
-    enum: ['pending', 'accepted', 'declined', 'referred', 'interviewing', 'hired', 'closed'],
-    default: 'pending',
+    enum: ['pending_company_review', 'company_approved', 'company_rejected', 'pending', 'accepted', 'declined', 'referred', 'interviewing', 'hired', 'closed'],
+    default: 'pending_company_review',
   },
   statusHistory: [{
     from: String,

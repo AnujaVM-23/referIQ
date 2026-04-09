@@ -124,6 +124,14 @@ const ReferralStatus = () => {
                   Mark as Referred
                 </Button>
                 <Button
+                  variant="success"
+                  onClick={() => handleStatusUpdate('hired')}
+                  disabled={updating}
+                  className="w-full"
+                >
+                  Mark as Hired 🎉
+                </Button>
+                <Button
                   variant="secondary"
                   onClick={() => handleStatusUpdate('closed')}
                   disabled={updating}

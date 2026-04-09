@@ -47,6 +47,9 @@ const CandidateDashboard = () => {
   };
 
   const statusColors = {
+    pending_company_review: 'warning',
+    company_approved: 'primary',
+    company_rejected: 'danger',
     pending: 'warning',
     accepted: 'primary',
     declined: 'danger',

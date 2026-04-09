@@ -27,8 +27,12 @@ const DiscoverCandidates = () => {
   };
 
   const handleConnect = (candidateId) => {
-    addNotification('Opening referral form for candidate...', 'info');
-    // Handle referral to this candidate
+    if (!candidateId) {
+      addNotification('Candidate profile is unavailable', 'error');
+      return;
+    }
+
+    navigate(`/profile/view/${candidateId}`);
   };
 
   return (

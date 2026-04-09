@@ -108,7 +108,12 @@ const RootApp = () => {
   const defaultRoute = getDefaultRoute(user, profile);
 
   return (
-    <Router>
+    <Router
+      future={{
+        v7_startTransition: true,
+        v7_relativeSplatPath: true,
+      }}
+    >
       <NotificationContainer />
       <Routes>
         {/* Public Routes */}

@@ -4,14 +4,16 @@ import Avatar from '../common/Avatar';
 import Badge from '../common/Badge';
 
 const CandidateCard = ({ candidate, onConnect }) => {
+  const displayName = candidate.fullName || candidate.alias || 'Candidate';
+
   return (
     <div className="bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition">
       <div className="flex items-start justify-between mb-4">
         <div className="flex items-start gap-4">
-          <Avatar size="lg" alt={candidate.fullName} src={candidate.profilePhoto} />
+          <Avatar size="lg" alt={displayName} src={candidate.profilePhoto} />
           <div className="flex-1">
-            <h3 className="text-lg font-bold">{candidate.alias}</h3>
-            <p className="text-gray-600 text-sm">{candidate.headline}</p>
+            <h3 className="text-lg font-bold">{displayName}</h3>
+            <p className="text-gray-600 text-sm">{candidate.headline || 'No headline yet'}</p>
             <div className="mt-2 flex gap-2 flex-wrap">
               {candidate.skills && candidate.skills.slice(0, 3).map((skill) => (
                 <Badge key={skill} variant="primary" className="text-xs">
@@ -19,6 +21,11 @@ const CandidateCard = ({ candidate, onConnect }) => {
                 </Badge>
               ))}
             </div>
+            {Array.isArray(candidate.matchedSkills) && candidate.matchedSkills.length > 0 && (
+              <p className="text-xs text-green-700 mt-2">
+                Skill match: {candidate.matchedSkills.slice(0, 3).join(', ')}
+              </p>
+            )}
           </div>
         </div>
         <Badge variant={`${candidate.qualityScore >= 70 ? 'success' : 'warning'}`}>

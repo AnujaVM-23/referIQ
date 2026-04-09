@@ -2,6 +2,17 @@
 const CandidateProfile = require('../models/CandidateProfile');
 const ReferrerProfile = require('../models/ReferrerProfile');
 
+const normalizeTerms = (value) => {
+  if (!value) return [];
+  if (Array.isArray(value)) {
+    return value.map((v) => String(v).trim().toLowerCase()).filter(Boolean);
+  }
+  return String(value)
+    .split(',')
+    .map((v) => v.trim().toLowerCase())
+    .filter(Boolean);
+};
+
 const calculateMatchScore = (candidate, referrer) => {
   let score = 0;
 
@@ -46,20 +57,47 @@ const calculateMatchScore = (candidate, referrer) => {
   return Math.min(Math.round(score), 100);
 };
 
-const findTopMatches = async (candidateId, limit = 10) => {
+const findTopMatches = async (candidateId, options = {}) => {
   try {
+    const { limit = 10, company = '', skills = '' } = options;
     const candidate = await CandidateProfile.findOne({ userId: candidateId });
     if (!candidate) return [];
 
-    const referrers = await ReferrerProfile.find({ isAvailable: true }).limit(100);
+    const requestedCompany = String(company).trim();
+    const requestedSkills = normalizeTerms(skills);
+
+    const referrerQuery = { isAvailable: true };
+    if (requestedCompany) {
+      referrerQuery.company = { $regex: requestedCompany, $options: 'i' };
+    }
+
+    const referrers = await ReferrerProfile.find(referrerQuery).limit(100);
+
+    const candidateSkills = normalizeTerms(candidate.skills);
+    const candidateTargetCompanies = normalizeTerms(candidate.targetCompanies);
+    const candidateTargetRoles = normalizeTerms(candidate.targetRoles);
     
     const matches = referrers
       .map(referrer => ({
         ...referrer.toObject(),
         matchScore: calculateMatchScore(candidate, referrer),
+        matchedSkills: candidateSkills.filter((skill) =>
+          String(referrer.role || '').toLowerCase().includes(skill)
+        ),
+        matchedTargetCompany: candidateTargetCompanies.some((c) =>
+          String(referrer.company || '').toLowerCase().includes(c)
+        ),
+        matchedTargetRole: candidateTargetRoles.some((r) =>
+          String(referrer.role || '').toLowerCase().includes(r)
+        ),
       }))
+      .filter((referrer) => {
+        if (requestedSkills.length === 0) return true;
+        const role = String(referrer.role || '').toLowerCase();
+        return requestedSkills.some((skill) => role.includes(skill));
+      })
       .sort((a, b) => b.matchScore - a.matchScore)
-      .slice(0, limit);
+      .slice(0, parseInt(limit, 10));
 
     return matches;
   } catch (error) {

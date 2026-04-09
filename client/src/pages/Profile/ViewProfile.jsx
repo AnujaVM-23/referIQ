@@ -1,23 +1,49 @@
 // client/src/pages/Profile/ViewProfile.jsx
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { profileAPI } from '../../services/api';
+import { profileAPI, referralAPI } from '../../services/api';
 import { useAuth } from '../../hooks/useAuth';
 import Avatar from '../../components/common/Avatar';
 import Badge from '../../components/common/Badge';
 import Button from '../../components/common/Button';
+import { NotificationContext } from '../../context/NotificationContext';
 
 const ViewProfile = () => {
   const { userId } = useParams();
   const navigate = useNavigate();
   const { user: loggedInUser } = useAuth();
+  const { addNotification } = React.useContext(NotificationContext);
   const [profile, setProfile] = useState(null);
   const [user, setUser] = useState(null);
+  const [relatedReferral, setRelatedReferral] = useState(null);
+  const [actionLoading, setActionLoading] = useState(false);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     fetchProfile();
   }, [userId]);
+
+  useEffect(() => {
+    const fetchRelatedReferral = async () => {
+      const actorRole = loggedInUser?.role;
+      const viewedRole = user?.role;
+      const viewedUserId = user?.id || user?._id;
+
+      if (actorRole !== 'referrer' || viewedRole !== 'candidate' || !viewedUserId) {
+        setRelatedReferral(null);
+        return;
+      }
+
+      try {
+        const response = await referralAPI.getReferralForReferrerCandidate(viewedUserId);
+        setRelatedReferral(response.data.referral || null);
+      } catch (error) {
+        setRelatedReferral(null);
+      }
+    };
+
+    fetchRelatedReferral();
+  }, [loggedInUser?.role, user?.role, user?.id, user?._id]);
 
   const fetchProfile = async () => {
     try {
@@ -39,9 +65,33 @@ const ViewProfile = () => {
   const loggedInUserId = loggedInUser?.id || loggedInUser?._id;
   const profileUserId = user?.id || user?._id;
   const isOwnProfile = loggedInUserId && profileUserId && String(loggedInUserId) === String(profileUserId);
+  const isReferrerViewingCandidate = loggedInUser?.role === 'referrer' && isCandidate;
   const displayName = isOwnProfile
     ? (profile.fullName?.trim() || profile.alias || 'My Profile')
     : (profile.alias || profile.fullName?.trim() || 'Anonymous');
+
+  const handleReferralDecision = async (decision) => {
+    if (!relatedReferral?._id) {
+      addNotification('No referral request found for this candidate.', 'error');
+      return;
+    }
+
+    try {
+      setActionLoading(true);
+      const newStatus = decision === 'accept' ? 'accepted' : 'declined';
+      const response = await referralAPI.updateStatus(
+        relatedReferral._id,
+        newStatus,
+        `Referrer ${decision}ed from candidate profile view`
+      );
+      setRelatedReferral(response.data.referral);
+      addNotification(`Referral ${newStatus} successfully`, 'success');
+    } catch (error) {
+      addNotification(error.response?.data?.error || 'Failed to update referral status', 'error');
+    } finally {
+      setActionLoading(false);
+    }
+  };
 
   return (
     <div className="max-w-3xl mx-auto">
@@ -51,6 +101,39 @@ const ViewProfile = () => {
             <Button variant="primary" onClick={() => navigate('/profile/edit')}>
               Edit Profile
             </Button>
+          </div>
+        )}
+
+        {isReferrerViewingCandidate && (
+          <div className="mb-4 border rounded-lg p-4 bg-gray-50">
+            <div className="flex items-center justify-between gap-3 flex-wrap">
+              <div>
+                <p className="font-semibold">Referral Decision</p>
+                <p className="text-sm text-gray-600">
+                  {relatedReferral
+                    ? `Current status: ${relatedReferral.status.replace(/_/g, ' ')}`
+                    : 'No referral request yet from this candidate.'}
+                </p>
+              </div>
+              {relatedReferral?.status === 'pending' && (
+                <div className="flex gap-2">
+                  <Button
+                    variant="success"
+                    disabled={actionLoading}
+                    onClick={() => handleReferralDecision('accept')}
+                  >
+                    {actionLoading ? 'Processing...' : 'Accept'}
+                  </Button>
+                  <Button
+                    variant="danger"
+                    disabled={actionLoading}
+                    onClick={() => handleReferralDecision('reject')}
+                  >
+                    {actionLoading ? 'Processing...' : 'Reject'}
+                  </Button>
+                </div>
+              )}
+            </div>
           </div>
         )}
 

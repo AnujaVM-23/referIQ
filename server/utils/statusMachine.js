@@ -1,7 +1,8 @@
 // server/utils/statusMachine.js - Referral FSM transitions
 const validTransitions = {
+  pending_company_review: ['accepted', 'declined'],
   pending: ['accepted', 'declined'],
-  accepted: ['referred', 'closed'],
+  accepted: ['referred', 'interviewing', 'hired', 'closed'],
   declined: [],
   referred: ['interviewing', 'closed'],
   interviewing: ['hired', 'closed'],

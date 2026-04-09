@@ -51,8 +51,14 @@ export const profileAPI = {
 export const referralAPI = {
   createReferral: (data) => api.post('/referrals', data),
   getReferral: (id) => api.get(`/referrals/${id}`),
+  getReferralForReferrerCandidate: (candidateId) =>
+    api.get(`/referrals/referrer/candidate/${candidateId}`),
   updateStatus: (id, newStatus, note) =>
     api.patch(`/referrals/${id}/status`, { newStatus, note }),
+  getCompanyVerificationRequests: (params) =>
+    api.get('/referrals/company/verification-requests', { params }),
+  reviewReferralByCompany: (id, decision, note) =>
+    api.patch(`/referrals/company/${id}/review`, { decision, note }),
   getSentReferrals: (params) =>
     api.get('/referrals/my/sent', { params }),
   getReceivedReferrals: (params) =>

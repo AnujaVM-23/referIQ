@@ -8,6 +8,11 @@ const { canTransition } = require('../utils/statusMachine');
 const { validateIntroMessage, checkRateLimitAsync, canRequestReferrer, incrementRequestCount } = require('../services/spam.service');
 const { updateTrustScore } = require('../services/trust.service');
 
+const ensureCompanyUser = async (userId) => {
+  const user = await User.findById(userId);
+  return user && user.role === 'company';
+};
+
 const createReferralRequest = async (req, res) => {
   try {
     const { referrerId, jobTitle, company, jobUrl, introMessage, resumeUrl } = req.body;
@@ -39,10 +44,10 @@ const createReferralRequest = async (req, res) => {
       jobUrl,
       introMessage,
       resumeUrl,
-      status: 'pending',
+      status: 'pending_company_review',
       statusHistory: [{
         from: null,
-        to: 'pending',
+        to: 'pending_company_review',
         changedBy: 'system',
         timestamp: new Date(),
       }],
@@ -55,10 +60,22 @@ const createReferralRequest = async (req, res) => {
     const notification = new Notification({
       userId: referrerId,
       type: 'request_received',
-      message: `You received a new referral request for ${jobTitle} at ${company}`,
+      message: `New referral request for ${jobTitle} at ${company} is pending company verification`,
       referralId: referral._id,
     });
     await notification.save();
+
+    // Notify all company users for verification action.
+    const companyUsers = await User.find({ role: 'company' }).select('_id');
+    if (companyUsers.length > 0) {
+      const companyNotifications = companyUsers.map((companyUser) => ({
+        userId: companyUser._id,
+        type: 'status_update',
+        message: `Verification needed: referral request for ${jobTitle} at ${company}`,
+        referralId: referral._id,
+      }));
+      await Notification.insertMany(companyNotifications);
+    }
 
     if (io) {
       io.to(`user_${referrerId}`).emit('new_referral_request', {
@@ -76,6 +93,14 @@ const createReferralRequest = async (req, res) => {
         referralId: referral._id.toString(),
         status: referral.status,
         timestamp: new Date(),
+      });
+
+      companyUsers.forEach((companyUser) => {
+        io.to(`user_${companyUser._id.toString()}`).emit('referral_status_changed', {
+          referralId: referral._id.toString(),
+          status: referral.status,
+          timestamp: new Date(),
+        });
       });
     }
 
@@ -183,6 +208,126 @@ const updateReferralStatus = async (req, res) => {
   }
 };
 
+const getCompanyVerificationRequests = async (req, res) => {
+  try {
+    const isCompany = await ensureCompanyUser(req.user.id);
+    if (!isCompany) {
+      return res.status(403).json({ error: 'Only company users can access verification requests' });
+    }
+
+    const { page = 1, limit = 20, status = 'pending_company_review', company } = req.query;
+    const query = {};
+
+    if (status) {
+      query.status = status;
+    }
+
+    if (company) {
+      query.company = { $regex: company, $options: 'i' };
+    }
+
+    const skip = (parseInt(page, 10) - 1) * parseInt(limit, 10);
+    const referrals = await ReferralRequest.find(query)
+      .populate('candidateId', 'email alias')
+      .populate('referrerId', 'email alias')
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(parseInt(limit, 10));
+
+    const total = await ReferralRequest.countDocuments(query);
+
+    return res.json({
+      referrals,
+      pagination: {
+        page: parseInt(page, 10),
+        limit: parseInt(limit, 10),
+        total,
+        pages: Math.ceil(total / parseInt(limit, 10)),
+      },
+    });
+  } catch (error) {
+    console.error('Get company verification requests error:', error);
+    return res.status(500).json({ error: 'Failed to get company verification requests' });
+  }
+};
+
+const reviewReferralByCompany = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { decision, note } = req.body;
+    const io = req.app.get('io');
+
+    const isCompany = await ensureCompanyUser(req.user.id);
+    if (!isCompany) {
+      return res.status(403).json({ error: 'Only company users can review referrals' });
+    }
+
+    if (!['accepted', 'rejected'].includes(decision)) {
+      return res.status(400).json({ error: 'Decision must be accepted or rejected' });
+    }
+
+    const referral = await ReferralRequest.findById(id);
+    if (!referral) {
+      return res.status(404).json({ error: 'Referral not found' });
+    }
+
+    if (referral.status !== 'pending_company_review') {
+      return res.status(400).json({ error: 'Referral is not pending company review' });
+    }
+
+    const previousStatus = referral.status;
+    const reviewedStatus = decision === 'accepted' ? 'accepted' : 'declined';
+    referral.status = reviewedStatus;
+    referral.statusHistory.push({
+      from: previousStatus,
+      to: reviewedStatus,
+      changedBy: 'company',
+      note,
+      timestamp: new Date(),
+    });
+
+    await referral.save();
+
+    const notificationMessage = decision === 'accepted'
+      ? `Company approved referral request for ${referral.jobTitle} at ${referral.company}`
+      : `Company rejected referral request for ${referral.jobTitle} at ${referral.company}`;
+
+    await Notification.insertMany([
+      {
+        userId: referral.candidateId,
+        type: 'status_update',
+        message: notificationMessage,
+        referralId: referral._id,
+      },
+      {
+        userId: referral.referrerId,
+        type: 'status_update',
+        message: notificationMessage,
+        referralId: referral._id,
+      },
+    ]);
+
+    if (io) {
+      const payload = {
+        referralId: referral._id.toString(),
+        status: referral.status,
+        changedBy: 'company',
+        timestamp: new Date(),
+      };
+      io.to(`user_${referral.candidateId.toString()}`).emit('referral_status_changed', payload);
+      io.to(`user_${referral.referrerId.toString()}`).emit('referral_status_changed', payload);
+    }
+
+    return res.json({
+      message: `Referral ${decision === 'accepted' ? 'approved' : 'rejected'} by company`,
+      referral,
+    });
+  } catch (error) {
+    console.error('Company referral review error:', error);
+    return res.status(500).json({ error: 'Failed to review referral by company' });
+  }
+};
+
 const getSentReferrals = async (req, res) => {
   try {
     const candidateId = req.user.id;
@@ -251,6 +396,30 @@ const getReceivedReferrals = async (req, res) => {
   }
 };
 
+const getReferralForReferrerCandidate = async (req, res) => {
+  try {
+    const { candidateId } = req.params;
+    const referrerId = req.user.id;
+
+    const referral = await ReferralRequest.findOne({
+      candidateId,
+      referrerId,
+    })
+      .sort({ createdAt: -1 })
+      .populate('candidateId', 'email alias')
+      .populate('referrerId', 'email alias');
+
+    if (!referral) {
+      return res.status(404).json({ error: 'No referral request found for this candidate' });
+    }
+
+    return res.json({ referral });
+  } catch (error) {
+    console.error('Get referral for referrer-candidate error:', error);
+    return res.status(500).json({ error: 'Failed to get referral request' });
+  }
+};
+
 const reportReferral = async (req, res) => {
   try {
     const { referralId, reason } = req.body;
@@ -297,5 +466,8 @@ module.exports = {
   updateReferralStatus,
   getSentReferrals,
   getReceivedReferrals,
+  getReferralForReferrerCandidate,
   reportReferral,
+  getCompanyVerificationRequests,
+  reviewReferralByCompany,
 };
