@@ -5,7 +5,10 @@ import { authAPI } from '../services/api';
 export const AuthContext = createContext();
 
 export const AuthProvider = ({ children }) => {
-  const [user, setUser] = useState(null);
+  const [user, setUser] = useState(() => {
+    const savedUser = localStorage.getItem('auth_user');
+    return savedUser ? JSON.parse(savedUser) : null;
+  });
   const [profile, setProfile] = useState(null);
   const [token, setToken] = useState(localStorage.getItem('token'));
   const [loading, setLoading] = useState(true);
@@ -17,10 +20,17 @@ export const AuthProvider = ({ children }) => {
           const response = await authAPI.getMe();
           setUser(response.data.user);
           setProfile(response.data.profile);
+          localStorage.setItem('auth_user', JSON.stringify(response.data.user));
         } catch (error) {
-          console.error('Auth initialization failed:', error);
-          localStorage.removeItem('token');
-          setToken(null);
+          const status = error.response?.status;
+          if (status === 401 || status === 403) {
+            localStorage.removeItem('token');
+            localStorage.removeItem('auth_user');
+            setToken(null);
+            setUser(null);
+          } else {
+            console.warn('Auth initialization failed due to network/server issue. Keeping local session.', error.message);
+          }
         }
       }
       setLoading(false);
@@ -33,6 +43,7 @@ export const AuthProvider = ({ children }) => {
     try {
       const response = await authAPI.login(email, password);
       localStorage.setItem('token', response.data.token);
+      localStorage.setItem('auth_user', JSON.stringify(response.data.user));
       setToken(response.data.token);
       setUser(response.data.user);
       return response.data;
@@ -45,6 +56,7 @@ export const AuthProvider = ({ children }) => {
     try {
       const response = await authAPI.register(email, password, role);
       localStorage.setItem('token', response.data.token);
+      localStorage.setItem('auth_user', JSON.stringify(response.data.user));
       setToken(response.data.token);
       setUser(response.data.user);
       return response.data;
@@ -60,6 +72,7 @@ export const AuthProvider = ({ children }) => {
       console.error('Logout error:', error);
     } finally {
       localStorage.removeItem('token');
+      localStorage.removeItem('auth_user');
       setToken(null);
       setUser(null);
       setProfile(null);

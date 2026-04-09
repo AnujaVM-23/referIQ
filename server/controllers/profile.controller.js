@@ -49,7 +49,7 @@ const updateProfile = async (req, res) => {
       return res.status(404).json({ error: 'User not found' });
     }
 
-    if (req.user.id !== id) {
+    if (String(req.user.id) !== String(id)) {
       return res.status(403).json({ error: 'Unauthorized' });
     }
 
@@ -60,6 +60,9 @@ const updateProfile = async (req, res) => {
         req.body,
         { new: true, runValidators: true }
       );
+      if (!profile) {
+        return res.status(404).json({ error: 'Candidate profile not found' });
+      }
       profile.qualityScore = calculateQualityScore(profile);
       await profile.save();
     } else if (user.role === 'referrer') {
@@ -68,6 +71,11 @@ const updateProfile = async (req, res) => {
         req.body,
         { new: true, runValidators: true }
       );
+      if (!profile) {
+        return res.status(404).json({ error: 'Referrer profile not found' });
+      }
+    } else {
+      return res.status(400).json({ error: 'Unsupported role for profile update' });
     }
 
     res.json({

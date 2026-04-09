@@ -19,6 +19,7 @@ const io = socketIo(server, {
 
 // Setup Socket.io handlers
 setupSocket(io);
+app.set('io', io);
 
 server.listen(PORT, () => {
   console.log(`🚀 RefLink server running on port ${PORT}`);

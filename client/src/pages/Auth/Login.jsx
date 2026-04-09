@@ -35,9 +35,15 @@ const Login = () => {
     try {
       setLoading(true);
       const response = await login(formData.email, formData.password);
+      const userRole = response?.user?.role;
+      const nextPath = userRole === 'referrer'
+        ? '/dashboard/referrer'
+        : userRole === 'company'
+          ? '/company/dashboard'
+          : '/dashboard/candidate';
       addNotification('✅ Login successful! Redirecting...', 'success');
       setTimeout(() => {
-        navigate('/dashboard/candidate');
+        navigate(nextPath);
       }, 500);
     } catch (error) {
       console.error('Login error:', error);

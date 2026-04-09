@@ -21,7 +21,7 @@ export const useSocket = () => {
 
     socketRef.current.on('connect', () => {
       console.log('✅ Socket connected');
-      socketRef.current.emit('join_notification_room', { userId: user.id });
+      socketRef.current.emit('join_notification_room', { userId: user.id || user._id });
     });
 
     socketRef.current.on('disconnect', () => {

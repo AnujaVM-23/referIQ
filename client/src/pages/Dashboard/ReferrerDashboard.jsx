@@ -1,13 +1,19 @@
 // client/src/pages/Dashboard/ReferrerDashboard.jsx
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useContext } from 'react';
+import { Link } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
+import { useSocket } from '../../hooks/useSocket';
 import { referralAPI } from '../../services/api';
+import { NotificationContext } from '../../context/NotificationContext';
 import ScoreCard from '../../components/dashboard/ScoreCard';
 import Leaderboard from '../../components/dashboard/Leaderboard';
 import Badge from '../../components/common/Badge';
 
 const ReferrerDashboard = () => {
   const { user, profile } = useAuth();
+  const { on, off } = useSocket();
+  const { addNotification } = useContext(NotificationContext);
+  const userId = user?.id || user?._id;
   const [referrals, setReferrals] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('all');
@@ -15,6 +21,28 @@ const ReferrerDashboard = () => {
   useEffect(() => {
     fetchReferrals();
   }, [filter]);
+
+  useEffect(() => {
+    const handleNewRequest = () => {
+      fetchReferrals();
+      addNotification('New referral request received', 'info', 3000);
+    };
+
+    const handleStatusChanged = (payload) => {
+      fetchReferrals();
+      if (payload?.status) {
+        addNotification(`Referral updated: ${payload.status}`, 'info', 3000);
+      }
+    };
+
+    on('new_referral_request', handleNewRequest);
+    on('referral_status_changed', handleStatusChanged);
+
+    return () => {
+      off('new_referral_request', handleNewRequest);
+      off('referral_status_changed', handleStatusChanged);
+    };
+  }, [on, off, filter]);
 
   const fetchReferrals = async () => {
     try {
@@ -98,7 +126,7 @@ const ReferrerDashboard = () => {
               <div className="text-center py-8">Loading referrals...</div>
             ) : referrals.length === 0 ? (
               <div className="text-center py-8 text-gray-600">
-                No referrals yet. <a href="/discover/candidates" className="text-blue-600 hover:underline">Discover candidates to refer</a>
+                No referrals yet. <Link to="/discover/candidates" className="text-blue-600 hover:underline">Discover candidates to refer</Link>
               </div>
             ) : (
               <div className="overflow-x-auto">
@@ -126,9 +154,9 @@ const ReferrerDashboard = () => {
                           {new Date(referral.createdAt).toLocaleDateString()}
                         </td>
                         <td className="px-4 py-3">
-                          <a href={`/referral/status/${referral._id}`} className="text-blue-600 hover:underline">
+                          <Link to={`/referral/status/${referral._id}`} className="text-blue-600 hover:underline">
                             View
-                          </a>
+                          </Link>
                         </td>
                       </tr>
                     ))}
@@ -141,7 +169,7 @@ const ReferrerDashboard = () => {
 
         <div className="space-y-6">
           {/* Score Card */}
-          <ScoreCard userId={user?.id} />
+          <ScoreCard userId={userId} />
 
           {/* Leaderboard */}
           <Leaderboard company={profile?.company} limit={5} />

@@ -1,12 +1,16 @@
 // client/src/pages/Profile/ViewProfile.jsx
 import React, { useState, useEffect } from 'react';
-import { useParams } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { profileAPI } from '../../services/api';
+import { useAuth } from '../../hooks/useAuth';
 import Avatar from '../../components/common/Avatar';
 import Badge from '../../components/common/Badge';
+import Button from '../../components/common/Button';
 
 const ViewProfile = () => {
   const { userId } = useParams();
+  const navigate = useNavigate();
+  const { user: loggedInUser } = useAuth();
   const [profile, setProfile] = useState(null);
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -32,15 +36,29 @@ const ViewProfile = () => {
   if (!profile) return <div className="text-center py-8">Profile not found</div>;
 
   const isCandidate = user?.role === 'candidate';
+  const loggedInUserId = loggedInUser?.id || loggedInUser?._id;
+  const profileUserId = user?.id || user?._id;
+  const isOwnProfile = loggedInUserId && profileUserId && String(loggedInUserId) === String(profileUserId);
+  const displayName = isOwnProfile
+    ? (profile.fullName?.trim() || profile.alias || 'My Profile')
+    : (profile.alias || profile.fullName?.trim() || 'Anonymous');
 
   return (
     <div className="max-w-3xl mx-auto">
       <div className="bg-white rounded-lg shadow-md p-8">
+        {isOwnProfile && (
+          <div className="flex justify-end mb-4">
+            <Button variant="primary" onClick={() => navigate('/profile/edit')}>
+              Edit Profile
+            </Button>
+          </div>
+        )}
+
         {/* Header */}
         <div className="flex items-start gap-6 mb-8">
-          <Avatar size="xl" alt={profile.alias} src={profile.profilePhoto} />
+          <Avatar size="xl" alt={displayName} src={profile.profilePhoto} />
           <div className="flex-1">
-            <h1 className="text-3xl font-bold">{profile.alias}</h1>
+            <h1 className="text-3xl font-bold">{displayName}</h1>
             <p className="text-gray-600 mt-2">
               {isCandidate ? profile.headline : `${profile.role} at ${profile.maskedCompany}`}
             </p>

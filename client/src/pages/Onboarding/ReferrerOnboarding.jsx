@@ -31,12 +31,24 @@ const ReferrerOnboarding = () => {
     e.preventDefault();
     try {
       setLoading(true);
+      const userId = user?.id || user?._id;
+      if (!userId) {
+        addNotification('Session issue detected. Please login again.', 'error');
+        setLoading(false);
+        return;
+      }
       const profileData = {
         ...formData,
+        fullName: formData.fullName.trim(),
+        company: formData.company.trim(),
+        maskedCompany: formData.maskedCompany.trim(),
+        role: formData.role.trim(),
+        department: formData.department.trim(),
+        location: formData.location.trim(),
         referralCapacity: parseInt(formData.referralCapacity),
       };
 
-      const response = await profileAPI.updateProfile(user.id, profileData);
+      const response = await profileAPI.updateProfile(userId, profileData);
       setProfile(response.data.profile);
       addNotification('Profile updated successfully!', 'success');
       navigate('/discover/candidates');

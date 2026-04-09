@@ -12,6 +12,12 @@ const ScoreCard = ({ userId }) => {
   }, [userId]);
 
   const fetchScore = async () => {
+    if (!userId) {
+      setScore(null);
+      setLoading(false);
+      return;
+    }
+
     try {
       setLoading(true);
       const response = await scoreAPI.getScore(userId);

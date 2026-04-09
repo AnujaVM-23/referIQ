@@ -76,7 +76,9 @@ userSchema.methods.comparePassword = async function(candidatePassword) {
 // Don't return password hash in JSON
 userSchema.methods.toJSON = function() {
   const obj = this.toObject();
+  obj.id = obj._id.toString();
   delete obj.passwordHash;
+  delete obj.__v;
   return obj;
 };
 

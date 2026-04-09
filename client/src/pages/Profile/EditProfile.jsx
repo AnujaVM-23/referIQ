@@ -27,6 +27,7 @@ const EditProfile = () => {
   });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const userId = user?.id || user?._id;
 
   useEffect(() => {
     const loadProfile = async () => {
@@ -47,9 +48,9 @@ const EditProfile = () => {
             department: profile.department || '',
           });
           setLoading(false);
-        } else if (user?.id) {
+        } else if (userId) {
           // Fetch profile if not in context
-          const response = await profileAPI.getProfile(user.id);
+          const response = await profileAPI.getProfile(userId);
           if (response.data?.profile) {
             const prof = response.data.profile;
             setFormData({
@@ -77,7 +78,7 @@ const EditProfile = () => {
     };
 
     loadProfile();
-  }, [profile, user?.id]);
+  }, [profile, userId]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -98,10 +99,16 @@ const EditProfile = () => {
       // Remove undefined keys
       Object.keys(profileData).forEach(key => profileData[key] === undefined && delete profileData[key]);
 
-      const response = await profileAPI.updateProfile(user.id, profileData);
+      if (!userId) {
+        addNotification('User session not found. Please login again.', 'error');
+        setSaving(false);
+        return;
+      }
+
+      const response = await profileAPI.updateProfile(userId, profileData);
       setProfile(response.data.profile);
       addNotification('Profile updated successfully!', 'success');
-      navigate('/profile/view/' + user.id);
+      navigate('/profile/view/' + userId);
     } catch (error) {
       addNotification(error.response?.data?.error || 'Failed to update profile', 'error');
     } finally {

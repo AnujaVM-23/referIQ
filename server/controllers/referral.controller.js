@@ -12,6 +12,7 @@ const createReferralRequest = async (req, res) => {
   try {
     const { referrerId, jobTitle, company, jobUrl, introMessage, resumeUrl } = req.body;
     const candidateId = req.user.id;
+    const io = req.app.get('io');
 
     // Validate intro message
     if (!validateIntroMessage(introMessage)) {
@@ -59,6 +60,25 @@ const createReferralRequest = async (req, res) => {
     });
     await notification.save();
 
+    if (io) {
+      io.to(`user_${referrerId}`).emit('new_referral_request', {
+        referralId: referral._id.toString(),
+        candidateId,
+        referrerId,
+        jobTitle,
+        company,
+        status: referral.status,
+        timestamp: new Date(),
+      });
+
+      // Also notify sender dashboard so their list updates instantly.
+      io.to(`user_${candidateId}`).emit('referral_status_changed', {
+        referralId: referral._id.toString(),
+        status: referral.status,
+        timestamp: new Date(),
+      });
+    }
+
     res.status(201).json({
       message: 'Referral request created successfully',
       referral,
@@ -92,6 +112,7 @@ const updateReferralStatus = async (req, res) => {
     const { id } = req.params;
     const { newStatus, note } = req.body;
     const userId = req.user.id;
+    const io = req.app.get('io');
 
     const referral = await ReferralRequest.findById(id);
     if (!referral) {
@@ -113,9 +134,10 @@ const updateReferralStatus = async (req, res) => {
 
     // Update status
     const changedBy = isCandidate ? 'candidate' : 'referrer';
+    const previousStatus = referral.status;
     referral.status = newStatus;
     referral.statusHistory.push({
-      from: referral.status,
+      from: previousStatus,
       to: newStatus,
       changedBy,
       note,
@@ -138,6 +160,18 @@ const updateReferralStatus = async (req, res) => {
       referralId: referral._id,
     });
     await notification.save();
+
+    if (io) {
+      const statusPayload = {
+        referralId: referral._id.toString(),
+        status: newStatus,
+        changedBy,
+        timestamp: new Date(),
+      };
+
+      io.to(`user_${referral.candidateId.toString()}`).emit('referral_status_changed', statusPayload);
+      io.to(`user_${referral.referrerId.toString()}`).emit('referral_status_changed', statusPayload);
+    }
 
     res.json({
       message: 'Referral status updated successfully',

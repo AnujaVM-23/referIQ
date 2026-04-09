@@ -38,6 +38,34 @@ import EditProfile from './pages/Profile/EditProfile';
 // Pages - Company
 import CompanyDashboard from './pages/Company/CompanyDashboard';
 
+const isCandidateProfileComplete = (profile) => {
+  return Boolean(profile?.fullName?.trim())
+    && Array.isArray(profile?.targetRoles)
+    && profile.targetRoles.length > 0
+    && Array.isArray(profile?.targetCompanies)
+    && profile.targetCompanies.length > 0;
+};
+
+const isReferrerProfileComplete = (profile) => {
+  return Boolean(profile?.fullName?.trim())
+    && Boolean(profile?.company?.trim())
+    && Boolean(profile?.role?.trim());
+};
+
+const getDefaultRoute = (user, profile) => {
+  if (!user) return '/login';
+
+  if (user.role === 'candidate') {
+    return isCandidateProfileComplete(profile) ? '/dashboard/candidate' : '/onboarding/candidate';
+  }
+
+  if (user.role === 'referrer') {
+    return isReferrerProfileComplete(profile) ? '/dashboard/referrer' : '/onboarding/referrer';
+  }
+
+  return '/company/dashboard';
+};
+
 // Protected Route Container
 const ProtectedLayout = ({ children }) => {
   return (
@@ -52,8 +80,8 @@ const ProtectedLayout = ({ children }) => {
   );
 };
 
-const ProtectedRoute = ({ children }) => {
-  const { isAuthenticated, loading } = useAuth();
+const ProtectedRoute = ({ children, allowedRoles }) => {
+  const { isAuthenticated, loading, user, profile } = useAuth();
 
   if (loading) {
     return <div className="flex items-center justify-center h-screen">Loading...</div>;
@@ -63,35 +91,41 @@ const ProtectedRoute = ({ children }) => {
     return <Navigate to="/login" replace />;
   }
 
+  if (allowedRoles && user && !allowedRoles.includes(user.role)) {
+    return <Navigate to={getDefaultRoute(user, profile)} replace />;
+  }
+
   return <ProtectedLayout>{children}</ProtectedLayout>;
 };
 
 const RootApp = () => {
-  const { isAuthenticated, loading } = useAuth();
+  const { isAuthenticated, loading, user, profile } = useAuth();
 
   if (loading) {
     return <div className="flex items-center justify-center h-screen">Loading...</div>;
   }
+
+  const defaultRoute = getDefaultRoute(user, profile);
 
   return (
     <Router>
       <NotificationContainer />
       <Routes>
         {/* Public Routes */}
-        {!isAuthenticated && (
-          <>
-            <Route path="/login" element={<Login />} />
-            <Route path="/register" element={<Register />} />
-          </>
-        )}
+        <Route
+          path="/login"
+          element={!isAuthenticated ? <Login /> : <Navigate to={defaultRoute} replace />}
+        />
+        <Route
+          path="/register"
+          element={!isAuthenticated ? <Register /> : <Navigate to={defaultRoute} replace />}
+        />
 
         {/* Protected Routes */}
-        {isAuthenticated && (
-          <>
             <Route
               path="/onboarding/candidate"
               element={
-                <ProtectedRoute>
+                <ProtectedRoute allowedRoles={['candidate']}>
                   <CandidateOnboarding />
                 </ProtectedRoute>
               }
@@ -99,7 +133,7 @@ const RootApp = () => {
             <Route
               path="/onboarding/referrer"
               element={
-                <ProtectedRoute>
+                <ProtectedRoute allowedRoles={['referrer']}>
                   <ReferrerOnboarding />
                 </ProtectedRoute>
               }
@@ -108,7 +142,7 @@ const RootApp = () => {
             <Route
               path="/discover/referrers"
               element={
-                <ProtectedRoute>
+                <ProtectedRoute allowedRoles={['candidate']}>
                   <DiscoverReferrers />
                 </ProtectedRoute>
               }
@@ -116,7 +150,7 @@ const RootApp = () => {
             <Route
               path="/discover/candidates"
               element={
-                <ProtectedRoute>
+                <ProtectedRoute allowedRoles={['referrer']}>
                   <DiscoverCandidates />
                 </ProtectedRoute>
               }
@@ -142,7 +176,7 @@ const RootApp = () => {
             <Route
               path="/dashboard/candidate"
               element={
-                <ProtectedRoute>
+                <ProtectedRoute allowedRoles={['candidate']}>
                   <CandidateDashboard />
                 </ProtectedRoute>
               }
@@ -150,7 +184,7 @@ const RootApp = () => {
             <Route
               path="/dashboard/referrer"
               element={
-                <ProtectedRoute>
+                <ProtectedRoute allowedRoles={['referrer']}>
                   <ReferrerDashboard />
                 </ProtectedRoute>
               }
@@ -176,19 +210,14 @@ const RootApp = () => {
             <Route
               path="/company/dashboard"
               element={
-                <ProtectedRoute>
+                <ProtectedRoute allowedRoles={['company']}>
                   <CompanyDashboard />
                 </ProtectedRoute>
               }
             />
 
-            <Route path="/" element={<Navigate to="/dashboard/candidate" replace />} />
-            <Route path="*" element={<Navigate to="/dashboard/candidate" replace />} />
-          </>
-        )}
-
-        {/* Redirect unauthenticated users */}
-        {!isAuthenticated && <Route path="*" element={<Navigate to="/login" replace />} />}
+            <Route path="/" element={<Navigate to={isAuthenticated ? defaultRoute : '/login'} replace />} />
+            <Route path="*" element={<Navigate to={isAuthenticated ? defaultRoute : '/login'} replace />} />
       </Routes>
     </Router>
   );

@@ -17,10 +17,15 @@ const generateToken = (userId) => {
 const register = async (req, res) => {
   try {
     const { email, password, role } = req.body;
+    const normalizedEmail = email?.trim().toLowerCase();
 
     // Validate input
-    if (!email || !password || !role) {
+    if (!normalizedEmail || !password || !role) {
       return res.status(400).json({ error: 'Email, password, and role are required' });
+    }
+
+    if (password.length < 6) {
+      return res.status(400).json({ error: 'Password must be at least 6 characters' });
     }
 
     if (!['candidate', 'referrer', 'company'].includes(role)) {
@@ -28,7 +33,7 @@ const register = async (req, res) => {
     }
 
     // Check if user exists
-    const existingUser = await User.findOne({ email });
+    const existingUser = await User.findOne({ email: normalizedEmail });
     if (existingUser) {
       return res.status(409).json({ error: 'Email already registered' });
     }
@@ -36,7 +41,7 @@ const register = async (req, res) => {
     // Create user
     const alias = generateAlias();
     const user = new User({
-      email,
+      email: normalizedEmail,
       passwordHash: password,
       role,
       alias,
@@ -85,12 +90,13 @@ const register = async (req, res) => {
 const login = async (req, res) => {
   try {
     const { email, password } = req.body;
+    const normalizedEmail = email?.trim().toLowerCase();
 
-    if (!email || !password) {
+    if (!normalizedEmail || !password) {
       return res.status(400).json({ error: 'Email and password are required' });
     }
 
-    const user = await User.findOne({ email });
+    const user = await User.findOne({ email: normalizedEmail });
     if (!user) {
       return res.status(401).json({ error: 'Invalid email or password' });
     }
@@ -129,9 +135,12 @@ const getMe = async (req, res) => {
       return res.status(404).json({ error: 'User not found' });
     }
 
-    const profile = user.role === 'candidate'
-      ? await CandidateProfile.findOne({ userId: user._id })
-      : await ReferrerProfile.findOne({ userId: user._id });
+    let profile = null;
+    if (user.role === 'candidate') {
+      profile = await CandidateProfile.findOne({ userId: user._id });
+    } else if (user.role === 'referrer') {
+      profile = await ReferrerProfile.findOne({ userId: user._id });
+    }
 
     res.json({
       user: user.toJSON(),

@@ -32,14 +32,31 @@ const CandidateOnboarding = () => {
     e.preventDefault();
     try {
       setLoading(true);
+      const userId = user?.id || user?._id;
+      if (!userId) {
+        addNotification('Session issue detected. Please login again.', 'error');
+        setLoading(false);
+        return;
+      }
       const profileData = {
         ...formData,
-        skills: formData.skills.split(',').map(s => s.trim()),
-        targetRoles: formData.targetRoles.split(',').map(r => r.trim()),
-        targetCompanies: formData.targetCompanies.split(',').map(c => c.trim()),
+        fullName: formData.fullName.trim(),
+        headline: formData.headline.trim(),
+        bio: formData.bio.trim(),
+        location: formData.location.trim(),
+        linkedinUrl: formData.linkedinUrl.trim(),
+        skills: formData.skills.split(',').map(s => s.trim()).filter(Boolean),
+        targetRoles: formData.targetRoles.split(',').map(r => r.trim()).filter(Boolean),
+        targetCompanies: formData.targetCompanies.split(',').map(c => c.trim()).filter(Boolean),
       };
 
-      const response = await profileAPI.updateProfile(user.id, profileData);
+      if (profileData.targetRoles.length === 0 || profileData.targetCompanies.length === 0) {
+        addNotification('Please add at least one target role and one target company.', 'error');
+        setLoading(false);
+        return;
+      }
+
+      const response = await profileAPI.updateProfile(userId, profileData);
       setProfile(response.data.profile);
       addNotification('Profile updated successfully!', 'success');
       navigate('/discover/referrers');
